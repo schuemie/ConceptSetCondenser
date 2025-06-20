@@ -1,0 +1,20 @@
+Package: ConceptSetCondenser
+Type: Package
+Title: Condense concept sets to parsimonious expressions
+Version: 0.0.1
+Date: 2025-06-20
+Authors@R: c(
+  person("Martijn", "Schuemie", , "schuemie@ohdsi.org", role = c("aut", "cre"))
+  )
+Maintainer: Martijn Schuemie <schuemie@ohdsi.org>
+Description: Condense concept sets to parsimonious expressions.
+SystemRequirements: Java (>= 8)
+License: Apache License 2.0
+Imports:
+  rJava,
+  dplyr,
+  rlang
+Suggests:
+  testthat
+RoxygenNote: 7.3.2
+Encoding: UTF-8
