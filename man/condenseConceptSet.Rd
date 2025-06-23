@@ -4,36 +4,14 @@
 \alias{condenseConceptSet}
 \title{Condense concept set}
 \usage{
-condenseConceptSet(includedConceptIds, conceptsToDescendants)
+condenseConceptSet(conceptSetData)
 }
 \arguments{
-\item{includedConceptIds}{The concept IDs of all concepts included in the concept set. This should be
-the fully resolved concept set.}
-
-\item{conceptsToDescendants}{For all concepts included in the concept set plus all of their descendants, 
-list all the descendants. This should be a tibble with the structure described
-in the details section.}
+\item{conceptSetData}{An object of type `ConceptData` as created by `fetchConceptSetData`.}
 }
 \value{
 A tibble with a representation of the optimal concept set expression
 }
 \description{
 Condense concept set
-}
-\details{
-`conceptsToDescendants` should have these two columns:
-
-1. `conceptId`: the ID of the ancestor concept. Repeat this for all descendants of this concept.
-2. `descendantConceptId`:  the ID of the descendant concept. 
-
-Following the OHDSI conventions, the descendants should include the concept itself. #'
-}
-\examples{
-includedConceptIds <- c(1, 2, 3, 4)
-conceptsToDescendants <- data.frame(
-  conceptId = c(1, 1, 1, 1, 2, 2, 3, 4 ,5),
-  descendantConceptId = c(1, 2, 3, 5, 2, 3, 3, 4, 5)
-)
-condenseConceptSet(includedConceptIds, conceptsToDescendants)
-
 }

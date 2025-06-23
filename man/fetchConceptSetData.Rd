@@ -31,7 +31,7 @@ support temp tables, a database schema where the
 user has write access.}
 }
 \value{
-A list containing the two inputs for `condenseConceptSet()`.
+A list containing the three inputs for `condenseConceptSet()`.
 }
 \description{
 Fetch data for concept set condensation

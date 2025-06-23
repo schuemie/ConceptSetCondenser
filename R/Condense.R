@@ -18,34 +18,14 @@
 
 #' Condense concept set
 #'
-#' @param includedConceptIds    The concept IDs of all concepts included in the concept set. This should be
-#'                              the fully resolved concept set.
-#' @param conceptsToDescendants For all concepts included in the concept set plus all of their descendants, 
-#'                              list all the descendants. This should be a tibble with the structure described
-#'                              in the details section.
-#'                              
-#' @details
-#' `conceptsToDescendants` should have these two columns:
-#' 
-#' 1. `conceptId`: the ID of the ancestor concept. Repeat this for all descendants of this concept.
-#' 2. `descendantConceptId`:  the ID of the descendant concept. 
-#' 
-#' Following the OHDSI conventions, the descendants should include the concept itself. #' 
+#' @param conceptSetData An object of type `ConceptData` as created by `fetchConceptSetData`.
 #'
 #' @returns
 #' A tibble with a representation of the optimal concept set expression
 #'
-#' @examples
-#' includedConceptIds <- c(1, 2, 3, 4)
-#' conceptsToDescendants <- data.frame(
-#'   conceptId = c(1, 1, 1, 1, 2, 2, 3, 4 ,5),
-#'   descendantConceptId = c(1, 2, 3, 5, 2, 3, 3, 4, 5)
-#' )
-#' condenseConceptSet(includedConceptIds, conceptsToDescendants)
-#' 
 #' @export
-condenseConceptSet <- function(includedConceptIds, conceptsToDescendants) {
-  candidateConcepts <- conceptsToDescendants |>
+condenseConceptSet <- function(conceptSetData) {
+  candidateConcepts <- conceptSetData$conceptsToDescendants |>
     group_by(.data$conceptId) |>
     group_split()
   # group = candidateConcepts[[1]]
@@ -58,12 +38,34 @@ condenseConceptSet <- function(includedConceptIds, conceptsToDescendants) {
   candidateConcepts <- rJava::.jarray(lapply(candidateConcepts, createCandidateConcept), 
                                       contents.class = "org.ohdsi.conceptSetCondenser.CandidateConcept")
   condenser <- rJava::.jnew("org.ohdsi.conceptSetCondenser.ConceptSetCondenser",
-                            rJava::.jarray(as.integer(includedConceptIds)),
+                            rJava::.jarray(as.integer(conceptSetData$includedConceptIds)),
                             candidateConcepts)
   condenser$condense()
   solution <- condenser$getConceptSetExpression()
-  conceptSetExpression <- lapply(solution, function(x) tibble(conceptId = x$conceptId, exclude = x$exclude, descendants = x$descendants))
+  
+  # Format concept set expression using Circe format:
+  conceptSetExpression <- lapply(solution, 
+                                 function(x) tibble(conceptId = x$conceptId, exclude = x$exclude, descendants = x$descendants))
   conceptSetExpression <- bind_rows(conceptSetExpression)
-  message(sprintf("Concept set has %d concepts, optimal expression has %d concepts.", length(includedConceptIds), nrow(conceptSetExpression)))
+  conceptSetExpression <- conceptSetExpression |>
+    rename(CONCEPT_ID = "conceptId") |>
+    inner_join(conceptSetData$conceptMetaData, by = join_by("CONCEPT_ID"))
+  
+  # row = rows[[1]]
+  toCirceConcept <- function(row) {
+    concept <- list(
+      concept = as.list(select(row, -"exclude", -"descendants")),
+      isExcluded = row$exclude,
+      includeDescendants = row$descendants,
+      includeMapped = FALSE
+    )
+  }
+  rows <- split(conceptSetExpression, seq_len(nrow(conceptSetExpression)))
+  conceptSetExpression <- lapply(rows, toCirceConcept)
+  names(conceptSetExpression) <- NULL
+  conceptSetExpression <- list(items = conceptSetExpression)
+  message(sprintf("Concept set has %d concepts, optimal expression has %d concepts.", 
+                  length(conceptSetData$includedConceptIds), 
+                  length(solution)))
   return(conceptSetExpression)
 }

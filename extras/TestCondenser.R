@@ -1,12 +1,5 @@
 library(ConceptSetCondenser)
 
-# Get example concept set expression -------------------------------------------
-ROhdsiWebApi::authorizeWebApi(Sys.getenv("baseUrl"), "windows")
-# conceptSetExpression <- ROhdsiWebApi::getConceptSetDefinition(11009, Sys.getenv("baseUrl"))
-conceptSetExpression <- ROhdsiWebApi::getConceptSetDefinition(10989, Sys.getenv("baseUrl"))
-
-
-# Fetch data -------------------------------------------------------------------
 connectionDetails <- DatabaseConnector::createConnectionDetails(
   dbms = "spark",
   connectionString = keyring::key_get("databricksConnectionString"),
@@ -15,18 +8,39 @@ connectionDetails <- DatabaseConnector::createConnectionDetails(
 )
 cdmDatabaseSchema <- "merative_mdcr.cdm_merative_mdcr_v3045"
 options(sqlRenderTempEmulationSchema = "scratch.scratch_mschuemi")
+
+conceptSetId <- 10989 # 11009
+
+newConceptSetName <- "[mschuemi] Test upload"
+
+
+
+# Get concept set expression from ATLAS ----------------------------------------
+ROhdsiWebApi::authorizeWebApi(Sys.getenv("baseUrl"), "windows")
+conceptSetExpression <- ROhdsiWebApi::getConceptSetDefinition(conceptSetId, Sys.getenv("baseUrl"))
+
+# Fetch data -------------------------------------------------------------------
 conceptSetData <- fetchConceptSetData(
   conceptSetExpression = conceptSetExpression, 
   connectionDetails = connectionDetails,
   cdmDatabaseSchema = cdmDatabaseSchema
 )
-saveRDS(conceptSetData, "e:/temp/conceptSetData.rds")
 
 # Main condenser function ------------------------------------------------------
-conceptSetData <- readRDS("e:/temp/conceptSetData.rds")
-condensed <- condenseConceptSet(conceptSetData$includedConceptIds, conceptSetData$conceptsToDescendants)
-condensed
-library(dplyr)
-conceptSetData$conceptsToDescendants |> 
-  filter(conceptId == 75860) |>
-  filter(!descendantConceptId %in% conceptSetData$includedConceptIds)
+condensedConceptSet <- condenseConceptSet(conceptSetData)
+
+# Use CirceR print friendly to print -------------------------------------------
+condensedConceptSetList <- list(id = 0, name = "Condensed", expression = condensedConceptSet)
+json <- as.character(jsonlite::toJSON(list(condensedConceptSetList), auto_unbox = TRUE))
+writeLines(CirceR::conceptSetListPrintFriendly(json))
+
+# Post condensed concept set to ATLAS ------------------------------------------
+ROhdsiWebApi::postConceptSetDefinition(
+  name = newConceptSetName,
+  conceptSetDefinition = condensedConceptSet,
+  baseUrl = Sys.getenv("baseUrl")
+)
+
+# ROhdsiWebApi::deleteConceptSetDefinition(11019, Sys.getenv("baseUrl"))
+
+

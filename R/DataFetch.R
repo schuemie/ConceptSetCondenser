@@ -30,7 +30,7 @@
 #'                             user has write access.
 #'            
 #' @returns
-#' A list containing the two inputs for `condenseConceptSet()`.
+#' A list containing the three inputs for `condenseConceptSet()`.
 #' 
 #' @export
 fetchConceptSetData <- function(conceptSetExpression, 
@@ -69,14 +69,36 @@ fetchConceptSetData <- function(conceptSetExpression,
   )$conceptId
   
   sql <- "
+    SELECT DISTINCT descendant_concept_id AS concept_id
+    INTO #universe
+    FROM #concept_set
+    INNER JOIN @cdm_database_schema.concept_ancestor
+      ON concept_id = ancestor_concept_id;
+  "
+  DatabaseConnector::renderTranslateExecuteSql(
+    connection = connection,
+    sql = sql,
+    cdm_database_schema = cdmDatabaseSchema,
+    progressBar = FALSE,
+    reportOverallTime = FALSE
+  )
+  message("Fetching concept metadata")
+  sql <- "
+    SELECT concept.*
+    FROM #universe universe
+    INNER JOIN @cdm_database_schema.concept
+      ON concept.concept_id = universe.concept_id;
+  "
+  conceptMetaData <- DatabaseConnector::renderTranslateQuerySql(
+    connection = connection,
+    sql = sql,
+    cdm_database_schema = cdmDatabaseSchema
+  )
+  message("Fetching concept descendants")
+  sql <- "
     SELECT concept_id,
       descendant_concept_id
-    FROM (
-      SELECT DISTINCT descendant_concept_id AS concept_id
-      FROM #concept_set
-      INNER JOIN @cdm_database_schema.concept_ancestor
-        ON concept_id = ancestor_concept_id
-    ) universe
+    FROM #universe
     INNER JOIN @cdm_database_schema.concept_ancestor
       ON concept_id = ancestor_concept_id;
   "
@@ -86,13 +108,20 @@ fetchConceptSetData <- function(conceptSetExpression,
     snakeCaseToCamelCase = TRUE,
     cdm_database_schema = cdmDatabaseSchema
   )
+  sql <- "
+    TRUNCATE TABLE #concept_set; 
+    DROP TABLE #concept_set;
+    TRUNCATE TABLE #universe; 
+    DROP TABLE #universe;
+  "
   DatabaseConnector::renderTranslateExecuteSql(
     connection = connection,
-    sql = "TRUNCATE TABLE #concept_set; DROP TABLE #concept_set;",
+    sql = sql,
     progressBar = FALSE,
     reportOverallTime = FALSE
   )
-  message(sprintf("Universe of concepts is %d concepts",  length(unique(conceptsToDescendants$conceptId))))
+  message(sprintf("Universe of concepts is %d concepts",  nrow(conceptMetaData)))
   return(list(includedConceptIds = includedConceptIds,
+              conceptMetaData = conceptMetaData,
               conceptsToDescendants = conceptsToDescendants))
 }
