@@ -18,6 +18,7 @@
 "_PACKAGE"
 
 #' @import dplyr
+#' @import DatabaseConnector
 #' @importFrom rlang .data
 
 .onLoad <- function(libname, pkgname) {

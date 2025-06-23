@@ -2,5 +2,6 @@
 
 export(condenseConceptSet)
 export(fetchConceptSetData)
+import(DatabaseConnector)
 import(dplyr)
 importFrom(rlang,.data)
