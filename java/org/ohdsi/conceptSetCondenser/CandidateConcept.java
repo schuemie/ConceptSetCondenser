@@ -27,6 +27,7 @@ public class CandidateConcept {
 	public int conceptId;
 	public Set<Integer> descendants; 
 	public Options[] validOptions; 
+	public boolean inConceptSet;
 	
 	/**
 	 * @param conceptId   The concept ID
