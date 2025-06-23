@@ -2,7 +2,9 @@ library(ConceptSetCondenser)
 
 # Get example concept set expression -------------------------------------------
 ROhdsiWebApi::authorizeWebApi(Sys.getenv("baseUrl"), "windows")
-conceptSetExpression <- ROhdsiWebApi::getConceptSetDefinition(11009, Sys.getenv("baseUrl"))
+# conceptSetExpression <- ROhdsiWebApi::getConceptSetDefinition(11009, Sys.getenv("baseUrl"))
+conceptSetExpression <- ROhdsiWebApi::getConceptSetDefinition(10989, Sys.getenv("baseUrl"))
+
 
 # Fetch data -------------------------------------------------------------------
 connectionDetails <- DatabaseConnector::createConnectionDetails(
@@ -23,4 +25,8 @@ saveRDS(conceptSetData, "e:/temp/conceptSetData.rds")
 # Main condenser function ------------------------------------------------------
 conceptSetData <- readRDS("e:/temp/conceptSetData.rds")
 condensed <- condenseConceptSet(conceptSetData$includedConceptIds, conceptSetData$conceptsToDescendants)
-
+condensed
+library(dplyr)
+conceptSetData$conceptsToDescendants |> 
+  filter(conceptId == 75860) |>
+  filter(!descendantConceptId %in% conceptSetData$includedConceptIds)

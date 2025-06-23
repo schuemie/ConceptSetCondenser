@@ -64,5 +64,6 @@ condenseConceptSet <- function(includedConceptIds, conceptsToDescendants) {
   solution <- condenser$getConceptSetExpression()
   conceptSetExpression <- lapply(solution, function(x) tibble(conceptId = x$conceptId, exclude = x$exclude, descendants = x$descendants))
   conceptSetExpression <- bind_rows(conceptSetExpression)
+  message(sprintf("Concept set has %d concepts, optimal expression has %d concepts.", length(includedConceptIds), nrow(conceptSetExpression)))
   return(conceptSetExpression)
 }

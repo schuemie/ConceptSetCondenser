@@ -30,10 +30,8 @@ public class ConceptSetCondenser {
 	private CandidateConcept.Options[] currentSolution;
 	private CandidateConcept.Options[] optimalSolution;
 	private int optimalLength;
-	private int solutionsEvaluated;
 	private int firstExclusionIndex;
-	private long surplusSum;
-	private int incompleteInclusionSolutions;
+	private List<Set<Integer>> remainingConceptsAtLevel;
 
 	/**
 	 * Constructor
@@ -50,7 +48,7 @@ public class ConceptSetCondenser {
 		this.candidateConcepts = new ArrayList<CandidateConcept>(candidateConcepts.length);
 		for (CandidateConcept candidateConcept : candidateConcepts)
 			this.candidateConcepts.add(candidateConcept);
-				
+
 	}
 
 	/**
@@ -60,7 +58,7 @@ public class ConceptSetCondenser {
 		determineValidStatesAndRemoveRedundant();
 		bruteForeSearch();
 	}
-	
+
 	/**
 	 * Get the optimal concept set expression. Will throw an exception if condense() hasn't
 	 * been called first.
@@ -111,35 +109,47 @@ public class ConceptSetCondenser {
 				result = Boolean.compare(obj2.validOptions.length == 1, obj1.validOptions.length == 1);
 				if (result != 0)
 					return result;
-//				result = Boolean.compare(obj1.validOptions[0] == CandidateConcept.Options.IGNORE, obj2.validOptions[0] == CandidateConcept.Options.IGNORE);
-//				if (result != 0)
-//					return result;
-		        return Integer.compare(obj2.descendants.size(), obj1.descendants.size());
-		    }
+				return Integer.compare(obj2.descendants.size(), obj1.descendants.size());
+			}
 		};
 		candidateConcepts.sort(comparator);
-		firstExclusionIndex = -1;
-		for (int i = 0; i < candidateConcepts.size(); i++)
-			if (!candidateConcepts.get(i).inConceptSet) {
+
+		// At each level in the tree, determine what concepts could still be included or excluded from 
+		// that point forward. This will help terminate a branch when it cannot achieve a valid solution:
+		firstExclusionIndex = candidateConcepts.size();
+		remainingConceptsAtLevel = new ArrayList<Set<Integer>>(candidateConcepts.size());
+		Set<Integer> remainingConcepts = new HashSet<Integer>();
+		for (int i = candidateConcepts.size() - 1; i >= 0; i--) {
+			CandidateConcept candidateConcept = candidateConcepts.get(i);
+			if (candidateConcept.inConceptSet) {
+				if (i == firstExclusionIndex - 1)
+					remainingConcepts.clear();
+				if (candidateConcept.hasValidOption(CandidateConcept.Options.INCLUDE_WITH_DESCENDANTS)) {
+					remainingConcepts.addAll(candidateConcept.descendants);
+				} else {
+					remainingConcepts.add(candidateConcept.conceptId);
+				}
+			} else {
 				firstExclusionIndex = i;
-				break;
+				if (candidateConcept.hasValidOption(CandidateConcept.Options.EXCLUDE_WITH_DESCENDANTS)) {
+					remainingConcepts.addAll(candidateConcept.descendants);
+				} else {
+					remainingConcepts.add(candidateConcept.conceptId);
+				}
 			}
-		
-		// For debugging: output candidateConcepts:
-		for (CandidateConcept candidateConcept : candidateConcepts) {
-			System.out.println("- Concept ID " + candidateConcept.conceptId + ", valid options:" + Arrays.toString(candidateConcept.validOptions));
+			remainingConceptsAtLevel.add(new HashSet<Integer>(remainingConcepts));
 		}
-		
-		
+		Collections.reverse(remainingConceptsAtLevel);
+
+		// For debugging: output candidateConcepts:
+//		for (CandidateConcept candidateConcept : candidateConcepts) {
+//			System.out.println("- Concept ID " + candidateConcept.conceptId + ", valid options:" + Arrays.toString(candidateConcept.validOptions));
+//		}
+
 		optimalLength = candidateConcepts.size() + 1;
 		optimalSolution = new CandidateConcept.Options[candidateConcepts.size()];
-		solutionsEvaluated = 0;
 		currentSolution = new CandidateConcept.Options[candidateConcepts.size()];
-		surplusSum = 0;
-		incompleteInclusionSolutions = 0;
 		recurseOverOptions(0, 0, new HashSet<Integer>());
-		System.out.println("Evaluated " + solutionsEvaluated + " solutions");
-		System.out.println("Optimal solution has " + optimalLength + " concepts");
 	}
 
 	private void recurseOverOptions(int index, int currentLength, Set<Integer> currentConceptSet) {
@@ -151,51 +161,59 @@ public class ConceptSetCondenser {
 		} else if (index == firstExclusionIndex && !currentConceptSet.containsAll(conceptSet)) {
 			// Only exclusion options from here on, so if not all required concepts are in current
 			// set there is no way to add them
-			incompleteInclusionSolutions++;
-			if (incompleteInclusionSolutions % 1000000 == 0)
-				System.out.println("Skipped " + incompleteInclusionSolutions + " incomplete inclusion solutions.");
 			return;
 		} else {
-			if (index == firstExclusionIndex)
-				System.out.println("Evaluating new inclusion solution");
+			if (index < firstExclusionIndex) {
+				Set<Integer> missingConcepts = new HashSet<Integer>(conceptSet);
+				missingConcepts.removeAll(currentConceptSet);
+				if (!remainingConceptsAtLevel.get(index).containsAll(missingConcepts))
+					return;
+			} else {
+				Set<Integer> surplusConcepts = new HashSet<Integer>(currentConceptSet);
+				surplusConcepts.removeAll(conceptSet);
+				if (!remainingConceptsAtLevel.get(index).containsAll(surplusConcepts))
+					return;
+			}
+			
 			for (CandidateConcept.Options option : candidateConcepts.get(index).validOptions) {
 				currentSolution[index] = option;
 				Set<Integer> newConceptSet;
+				int newLength = currentLength;
 				switch (option) {
 				case INCLUDE:
 					if (currentConceptSet.contains(candidateConcepts.get(index).conceptId))
 						continue;
 					newConceptSet = new HashSet<Integer>(currentConceptSet);
 					newConceptSet.add(candidateConcepts.get(index).conceptId);
-					currentLength++;
+					newLength++;
 					break;
 				case INCLUDE_WITH_DESCENDANTS:
 					if (currentConceptSet.containsAll(candidateConcepts.get(index).descendants))
 						continue;
 					newConceptSet = new HashSet<Integer>(currentConceptSet);
 					newConceptSet.addAll(candidateConcepts.get(index).descendants);
-					currentLength++;
+					newLength++;
 					break;
 				case EXCLUDE:
 					if (!currentConceptSet.contains(candidateConcepts.get(index).conceptId))
 						continue;
 					newConceptSet = new HashSet<Integer>(currentConceptSet);
 					newConceptSet.remove(candidateConcepts.get(index).conceptId);
-					currentLength++;
+					newLength++;
 					break;
 				case EXCLUDE_WITH_DESCENDANTS:
 					if (Collections.disjoint(currentConceptSet, candidateConcepts.get(index).descendants))
 						continue;
 					newConceptSet = new HashSet<Integer>(currentConceptSet);
 					newConceptSet.removeAll(candidateConcepts.get(index).descendants);
-					currentLength++;
+					newLength++;
 					break;
 				default:
 					// IGNORE
 					newConceptSet = currentConceptSet;
 					break;
 				}
-				recurseOverOptions(index + 1, currentLength, newConceptSet);
+				recurseOverOptions(index + 1, newLength, newConceptSet);
 			}
 		}
 	}
@@ -205,14 +223,7 @@ public class ConceptSetCondenser {
 			if (currentLength < optimalLength) {
 				optimalSolution = Arrays.copyOf(currentSolution, currentSolution.length);
 				optimalLength = currentLength;
-				System.out.println("Found new optimum with " + optimalLength + " concepts");
 			}
-		} else 
-			surplusSum += currentConceptSet.size() - conceptSet.size();
-		solutionsEvaluated++;
-		if (solutionsEvaluated % 10000 == 0) {
-			System.out.println("Evaluated " + solutionsEvaluated + " solutions. Mean concept surplus is " + surplusSum/10000.0);
-			surplusSum = 0;
 		}
 	}
 
@@ -264,7 +275,7 @@ public class ConceptSetCondenser {
 					if (Collections.disjoint(conceptSet, candidateConcept.descendants)) {
 						// None of the descendants are in concept set, so can EXCLUDE_WITH_DESCENDANTS 
 						validOptions.add(CandidateConcept.Options.EXCLUDE_WITH_DESCENDANTS);
-						
+
 						// Also, descendants are redundant, so can be removed from candidate list:
 						Set<Integer> toRemove = new HashSet<Integer>(candidateConcept.descendants);
 						toRemove.remove(candidateConcept.conceptId);
