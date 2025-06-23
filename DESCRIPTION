@@ -10,10 +10,14 @@ Maintainer: Martijn Schuemie <schuemie@ohdsi.org>
 Description: Condense concept sets to parsimonious expressions.
 SystemRequirements: Java (>= 8)
 License: Apache License 2.0
+Depends:
+  DatabaseConnector
 Imports:
   rJava,
   dplyr,
-  rlang
+  rlang,
+  CirceR,
+  jsonlite
 Suggests:
   testthat
 RoxygenNote: 7.3.2

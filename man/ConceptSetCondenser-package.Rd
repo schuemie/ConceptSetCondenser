@@ -6,7 +6,7 @@
 \alias{ConceptSetCondenser-package}
 \title{ConceptSetCondenser: Condense concept sets to parsimonious expressions}
 \description{
-Condense concept sets to parsimonious expressions
+Condense concept sets to parsimonious expressions.
 }
 \author{
 \strong{Maintainer}: Martijn Schuemie \email{schuemie@ohdsi.org}

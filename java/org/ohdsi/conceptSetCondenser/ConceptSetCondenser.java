@@ -18,6 +18,7 @@ package org.ohdsi.conceptSetCondenser;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -91,21 +92,56 @@ public class ConceptSetCondenser {
 	}
 
 	private void bruteForeSearch() {
-		optimalLength = candidateConcepts.size();
-		currentSolution = new CandidateConcept.Options[candidateConcepts.size()];
+		// Sort candidate concepts by size of descendants. Since IGNORE is the first option
+		// that is evaluated, this means in the first part of the tree search we will evaluate
+		// options where these lower-level concepts are ignored.
+		Comparator<CandidateConcept> comparator = new Comparator<CandidateConcept>() {
+			public int compare(CandidateConcept obj1, CandidateConcept obj2) {
+		        return Integer.compare(obj1.descendants.size(), obj2.descendants.size());
+		    }
+		};
+		candidateConcepts.sort(comparator);
+		
+		// Baseline solution: include all concepts in concept set without descendants:
+		optimalLength = 0;
+		optimalSolution = new CandidateConcept.Options[candidateConcepts.size()];
+		for (int i = 0; i < optimalSolution.length; i++) {
+			CandidateConcept candidateConcept = candidateConcepts.get(i);
+			if (conceptSet.contains(candidateConcept.conceptId)) {
+				optimalSolution[i] = CandidateConcept.Options.INCLUDE;
+				optimalLength++;
+			} else 
+				optimalSolution[i] = CandidateConcept.Options.IGNORE;
+		}
+		System.out.println("Full tree size is " + computeTreeSize() + " solutions");
 		solutionsEvaluated = 0;
-		recurseOverOptions(0);
+		currentSolution = new CandidateConcept.Options[candidateConcepts.size()];
+		recurseOverOptions(0, 0);
 		System.out.println("Evaluated " + solutionsEvaluated + " solutions");
 		System.out.println("Optimal solution has " + optimalLength + " concepts");
 	}
+	
+	private double computeTreeSize() {
+		double treeSize = 1;
+		for (CandidateConcept candidateConcept : candidateConcepts) {
+			System.out.println("- Concept ID " + candidateConcept.conceptId + ", valid options:" + Arrays.toString(candidateConcept.validOptions));
+			treeSize *= candidateConcept.validOptions.length;
+		}
+		return treeSize;
+	}
 
-	private void recurseOverOptions(int index) {
-		if (index == candidateConcepts.size()) {
+	private void recurseOverOptions(int index, int notIgnored) {
+		if (notIgnored > optimalLength){
+			// Already cannot improve on current best solution
+			return;
+		} else if (index == candidateConcepts.size()) {
 			evaluateCurrentSolution();
 		} else {
 			for (CandidateConcept.Options option : candidateConcepts.get(index).validOptions) {
 				currentSolution[index] = option;
-				recurseOverOptions(index + 1);
+				if (option != CandidateConcept.Options.IGNORE)
+					notIgnored++;
+				recurseOverOptions(index + 1, notIgnored);
 			}
 		}
 	}
@@ -141,9 +177,12 @@ public class ConceptSetCondenser {
 			if (solutionLength < optimalLength) {
 				optimalSolution = Arrays.copyOf(currentSolution, currentSolution.length);
 				optimalLength = solutionLength;
+				System.out.println("Found new optimum with " + optimalLength + " concepts");
 			}
 		}
 		solutionsEvaluated++;
+		if (solutionsEvaluated % 1000000 == 0)
+			System.out.println("Evaluated " + solutionsEvaluated + " solutions");
 	}
 
 	private void determineValidStatesAndRemoveRedundant() {
@@ -188,19 +227,16 @@ public class ConceptSetCondenser {
 					// EXCLUDE_WITH_DESCENDANTS
 					validOptions.add(CandidateConcept.Options.EXCLUDE_WITH_DESCENDANTS);
 				} else {
+					validOptions.add(CandidateConcept.Options.EXCLUDE);
 					if (Collections.disjoint(conceptSet, candidateConcept.descendants)) {
-						// None of the descendants are in concept set, so no reason to evaluate
-						// EXCLUDE_WITH_DESCENDANTS
+						// None of the descendants are in concept set, so can EXCLUDE_WITH_DESCENDANTS 
 						validOptions.add(CandidateConcept.Options.EXCLUDE_WITH_DESCENDANTS);
-
+						
 						// Also, descendants are redundant, so can be removed from candidate list:
 						Set<Integer> toRemove = new HashSet<Integer>(candidateConcept.descendants);
 						toRemove.remove(candidateConcept.conceptId);
 						candidatesToRemove.addAll(toRemove);
-					} else {
-						validOptions.add(CandidateConcept.Options.EXCLUDE);
-						validOptions.add(CandidateConcept.Options.EXCLUDE_WITH_DESCENDANTS);
-					}
+					} 
 				}
 			}
 			candidateConcept.validOptions = validOptions.toArray(new CandidateConcept.Options[validOptions.size()]);
