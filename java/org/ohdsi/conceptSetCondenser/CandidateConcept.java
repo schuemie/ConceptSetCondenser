@@ -40,7 +40,7 @@ public class CandidateConcept {
 		for (int descendant : descendants)
 			this.descendants.add(descendant);
 		if (!this.descendants.contains(conceptId))
-			throw new RuntimeException("Descendants do not include concept itself for concept " + conceptId);
+			throw new IllegalArgumentException("Descendants do not include concept itself for concept " + conceptId);
 	}
 	
 	public boolean hasValidOption(Options option) {

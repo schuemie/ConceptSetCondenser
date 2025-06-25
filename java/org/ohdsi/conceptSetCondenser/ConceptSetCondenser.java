@@ -46,9 +46,13 @@ public class ConceptSetCondenser {
 		for (int concept : conceptSet)
 			this.conceptSet.add(concept);
 		this.candidateConcepts = new ArrayList<CandidateConcept>(candidateConcepts.length);
-		for (CandidateConcept candidateConcept : candidateConcepts)
+		Set<Integer> candidateConceptIds = new HashSet<Integer>(candidateConcepts.length);
+		for (CandidateConcept candidateConcept : candidateConcepts) {
 			this.candidateConcepts.add(candidateConcept);
-
+			candidateConceptIds.add(candidateConcept.conceptId);
+		}
+		if (!candidateConceptIds.containsAll(this.conceptSet))
+			throw new IllegalArgumentException("Not all included concepts are in the set of candidate concepts");
 	}
 
 	/**

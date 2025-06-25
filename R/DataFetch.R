@@ -68,12 +68,22 @@ fetchConceptSetData <- function(conceptSetExpression,
     snakeCaseToCamelCase = TRUE
   )$conceptId
   
+  # Union with original concept set to also include non-standard concepts (which
+  # do not have records in the concept_ancestor table).
   sql <- "
-    SELECT DISTINCT descendant_concept_id AS concept_id
+    SELECT DISTINCT concept_id
     INTO #universe
-    FROM #concept_set
-    INNER JOIN @cdm_database_schema.concept_ancestor
-      ON concept_id = ancestor_concept_id;
+    FROM (
+      SELECT DISTINCT descendant_concept_id AS concept_id
+      FROM #concept_set
+      INNER JOIN @cdm_database_schema.concept_ancestor
+        ON concept_id = ancestor_concept_id
+      
+      UNION ALL
+      
+      SELECT concept_id
+      FROM #concept_set
+    ) tmp;
   "
   DatabaseConnector::renderTranslateExecuteSql(
     connection = connection,
@@ -95,12 +105,24 @@ fetchConceptSetData <- function(conceptSetExpression,
     cdm_database_schema = cdmDatabaseSchema
   )
   message("Fetching concept descendants")
+  # Also creating descendant (is the same as ancestor concept) for non-standard 
+  # concepts.
   sql <- "
-    SELECT concept_id,
+    SELECT DISTINCT concept_id,
       descendant_concept_id
-    FROM #universe
-    INNER JOIN @cdm_database_schema.concept_ancestor
-      ON concept_id = ancestor_concept_id;
+    FROM (
+      SELECT concept_id,
+        descendant_concept_id
+      FROM #universe
+      INNER JOIN @cdm_database_schema.concept_ancestor
+        ON concept_id = ancestor_concept_id
+        
+      UNION ALL
+      
+      SELECT concept_id,
+        concept_id AS descendant_concept_id
+      FROM #universe
+    ) tmp;
   "
   conceptsToDescendants <- DatabaseConnector::renderTranslateQuerySql(
     connection = connection,
