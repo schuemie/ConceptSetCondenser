@@ -146,9 +146,9 @@ public class ConceptSetCondenser {
 		Collections.reverse(remainingConceptsAtLevel);
 
 		// For debugging: output candidateConcepts:
-//		for (CandidateConcept candidateConcept : candidateConcepts) {
-//			System.out.println("- Concept ID " + candidateConcept.conceptId + ", valid options:" + Arrays.toString(candidateConcept.validOptions));
-//		}
+		//		for (CandidateConcept candidateConcept : candidateConcepts) {
+		//			System.out.println("- Concept ID " + candidateConcept.conceptId + ", valid options:" + Arrays.toString(candidateConcept.validOptions));
+		//		}
 
 		optimalLength = candidateConcepts.size() + 1;
 		optimalSolution = new CandidateConcept.Options[candidateConcepts.size()];
@@ -178,38 +178,40 @@ public class ConceptSetCondenser {
 				if (!remainingConceptsAtLevel.get(index).containsAll(surplusConcepts))
 					return;
 			}
-			
-			for (CandidateConcept.Options option : candidateConcepts.get(index).validOptions) {
+			CandidateConcept candidateConcept = candidateConcepts.get(index);
+			for (CandidateConcept.Options option : candidateConcept.validOptions) {
 				currentSolution[index] = option;
 				Set<Integer> newConceptSet;
 				int newLength = currentLength;
 				switch (option) {
 				case INCLUDE:
-					if (currentConceptSet.contains(candidateConcepts.get(index).conceptId))
+					if (currentConceptSet.contains(candidateConcept.conceptId))
 						continue;
 					newConceptSet = new HashSet<Integer>(currentConceptSet);
-					newConceptSet.add(candidateConcepts.get(index).conceptId);
+					newConceptSet.add(candidateConcept.conceptId);
 					newLength++;
 					break;
 				case INCLUDE_WITH_DESCENDANTS:
-					if (currentConceptSet.containsAll(candidateConcepts.get(index).descendants))
+					if (currentConceptSet.containsAll(candidateConcept.descendants))
 						continue;
 					newConceptSet = new HashSet<Integer>(currentConceptSet);
-					newConceptSet.addAll(candidateConcepts.get(index).descendants);
+					newConceptSet.addAll(candidateConcept.descendants);
 					newLength++;
 					break;
 				case EXCLUDE:
-					if (!currentConceptSet.contains(candidateConcepts.get(index).conceptId))
+					if (!currentConceptSet.contains(candidateConcept.conceptId) ||
+							conceptSet.contains(candidateConcept.conceptId))
 						continue;
 					newConceptSet = new HashSet<Integer>(currentConceptSet);
-					newConceptSet.remove(candidateConcepts.get(index).conceptId);
+					newConceptSet.remove(candidateConcept.conceptId);
 					newLength++;
 					break;
 				case EXCLUDE_WITH_DESCENDANTS:
-					if (Collections.disjoint(currentConceptSet, candidateConcepts.get(index).descendants))
+					if (Collections.disjoint(currentConceptSet, candidateConcept.descendants) ||
+							hasOverlap(conceptSet, candidateConcept.descendants))
 						continue;
 					newConceptSet = new HashSet<Integer>(currentConceptSet);
-					newConceptSet.removeAll(candidateConcepts.get(index).descendants);
+					newConceptSet.removeAll(candidateConcept.descendants);
 					newLength++;
 					break;
 				default:
@@ -219,6 +221,14 @@ public class ConceptSetCondenser {
 				}
 				recurseOverOptions(index + 1, newLength, newConceptSet);
 			}
+		}
+	}
+
+	private boolean hasOverlap(Set<Integer> set1, Set<Integer> set2) {
+		if (set1.size() > set2.size()) {
+			return set2.stream().anyMatch(set1::contains);
+		} else {
+			return set1.stream().anyMatch(set2::contains);
 		}
 	}
 
