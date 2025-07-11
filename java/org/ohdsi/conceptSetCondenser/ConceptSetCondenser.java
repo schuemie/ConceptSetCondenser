@@ -32,6 +32,8 @@ public class ConceptSetCondenser {
 	private int optimalLength;
 	private int firstExclusionIndex;
 	private List<Set<Integer>> remainingConceptsAtLevel;
+	private long stepCount;
+	private static long MAX_STEP_COUNT = 10000000;
 
 	/**
 	 * Constructor
@@ -113,7 +115,7 @@ public class ConceptSetCondenser {
 				result = Boolean.compare(obj2.validOptions.length == 1, obj1.validOptions.length == 1);
 				if (result != 0)
 					return result;
-				return Integer.compare(obj2.descendants.size(), obj1.descendants.size());
+				return Integer.compare(obj2.relevantDescendantCount, obj1.relevantDescendantCount);
 			}
 		};
 		candidateConcepts.sort(comparator);
@@ -149,15 +151,20 @@ public class ConceptSetCondenser {
 		//		for (CandidateConcept candidateConcept : candidateConcepts) {
 		//			System.out.println("- Concept ID " + candidateConcept.conceptId + ", valid options:" + Arrays.toString(candidateConcept.validOptions));
 		//		}
-
 		optimalLength = candidateConcepts.size() + 1;
 		optimalSolution = new CandidateConcept.Options[candidateConcepts.size()];
 		currentSolution = new CandidateConcept.Options[candidateConcepts.size()];
+		stepCount = 0;
 		recurseOverOptions(0, 0, new HashSet<Integer>());
+		if (stepCount >= MAX_STEP_COUNT)
+			System.out.println("Reached max step count. Solution may not be optimal");
 	}
 
 	private void recurseOverOptions(int index, int currentLength, Set<Integer> currentConceptSet) {
-		if (currentLength > optimalLength){
+		stepCount++;
+		if (stepCount > MAX_STEP_COUNT) {
+			return;
+		} else if (currentLength >= optimalLength){
 			// Already cannot improve on current best solution
 			return;
 		} else if (index == candidateConcepts.size()) {
@@ -194,6 +201,10 @@ public class ConceptSetCondenser {
 				case INCLUDE_WITH_DESCENDANTS:
 					if (currentConceptSet.containsAll(candidateConcept.descendants))
 						continue;
+					Set<Integer> surplusConcepts = new HashSet<Integer>(candidateConcept.descendants);
+					surplusConcepts.removeAll(currentConceptSet);
+					if (Collections.disjoint(conceptSet, surplusConcepts))
+						continue;
 					newConceptSet = new HashSet<Integer>(currentConceptSet);
 					newConceptSet.addAll(candidateConcept.descendants);
 					newLength++;
@@ -207,8 +218,7 @@ public class ConceptSetCondenser {
 					newLength++;
 					break;
 				case EXCLUDE_WITH_DESCENDANTS:
-					if (Collections.disjoint(currentConceptSet, candidateConcept.descendants) ||
-							hasOverlap(conceptSet, candidateConcept.descendants))
+					if (Collections.disjoint(currentConceptSet, candidateConcept.descendants))
 						continue;
 					newConceptSet = new HashSet<Integer>(currentConceptSet);
 					newConceptSet.removeAll(candidateConcept.descendants);
@@ -224,17 +234,10 @@ public class ConceptSetCondenser {
 		}
 	}
 
-	private boolean hasOverlap(Set<Integer> set1, Set<Integer> set2) {
-		if (set1.size() > set2.size()) {
-			return set2.stream().anyMatch(set1::contains);
-		} else {
-			return set1.stream().anyMatch(set2::contains);
-		}
-	}
-
 	private void evaluateCurrentSolution(int currentLength, Set<Integer> currentConceptSet) {
 		if (currentConceptSet.equals(conceptSet)) {
 			if (currentLength < optimalLength) {
+				System.out.println("Found valid solution with length " + currentLength);
 				optimalSolution = Arrays.copyOf(currentSolution, currentSolution.length);
 				optimalLength = currentLength;
 			}
@@ -252,33 +255,43 @@ public class ConceptSetCondenser {
 			if (conceptSet.contains(candidateConcept.conceptId)) {
 				// Concept is in the concept set
 				candidateConcept.inConceptSet = true;
-				if (candidateConcept.descendants.size() == 1) {
-					// Has no descendants, so no difference between INCLUDE and
-					// INCLUDE_WITH_DESCENDANTS
-					validOptions.add(CandidateConcept.Options.INCLUDE_WITH_DESCENDANTS);
-				} else {
-					if (conceptSet.containsAll(candidateConcept.descendants)) {
-						// All descendants are in concept set, so no reason to evaluate
-						// INCLUDE
-						validOptions.add(CandidateConcept.Options.INCLUDE_WITH_DESCENDANTS);
-
-						// Also, descendants are redundant, so can be removed from candidate list:
-						Set<Integer> toRemove = new HashSet<Integer>(candidateConcept.descendants);
-						toRemove.remove(candidateConcept.conceptId);
-						candidatesToRemove.addAll(toRemove);
-					} else {
-						validOptions.add(CandidateConcept.Options.INCLUDE);
-						validOptions.add(CandidateConcept.Options.INCLUDE_WITH_DESCENDANTS);
-					}
-				}
 				// If concept is not a descendant of any other concept, it is not an option to
 				// ignore it
 				if (!cantIgnore(candidateConcept)) {
 					validOptions.add(CandidateConcept.Options.IGNORE);
 				}
+
+				if (candidateConcept.descendants.size() == 1) {
+					// Has no descendants, so no difference between INCLUDE and
+					// INCLUDE_WITH_DESCENDANTS
+					validOptions.add(CandidateConcept.Options.INCLUDE_WITH_DESCENDANTS);
+					candidateConcept.relevantDescendantCount = 1;
+				} else {
+					if (conceptSet.containsAll(candidateConcept.descendants)) {
+						// All descendants are in concept set, so no reason to evaluate
+						// INCLUDE
+						validOptions.add(CandidateConcept.Options.INCLUDE_WITH_DESCENDANTS);
+						candidateConcept.relevantDescendantCount = candidateConcept.descendants.size();
+
+						// Also, descendants are redundant, so can be removed from candidate list:
+						Set<Integer> toRemove = new HashSet<Integer>(candidateConcept.descendants);
+						toRemove.remove(candidateConcept.conceptId);
+						candidatesToRemove.addAll(toRemove);
+					} else {						
+						validOptions.add(CandidateConcept.Options.INCLUDE_WITH_DESCENDANTS);
+						validOptions.add(CandidateConcept.Options.INCLUDE);
+						
+						Set<Integer> intersection = new HashSet<Integer>(candidateConcept.descendants);
+						intersection.retainAll(conceptSet);
+						candidateConcept.relevantDescendantCount = intersection.size();
+					}
+				}
+
+
 			} else {
 				// Concept is *not* in the concept set
 				candidateConcept.inConceptSet = false;
+				candidateConcept.relevantDescendantCount = candidateConcept.descendants.size();
 				validOptions.add(CandidateConcept.Options.IGNORE);
 				if (candidateConcept.descendants.size() == 1) {
 					// Has no descendants, so no difference between EXCLUDE and
