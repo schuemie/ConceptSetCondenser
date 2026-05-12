@@ -102,7 +102,8 @@ fetchConceptSetData <- function(conceptSetExpression,
   conceptMetaData <- DatabaseConnector::renderTranslateQuerySql(
     connection = connection,
     sql = sql,
-    cdm_database_schema = cdmDatabaseSchema
+    cdm_database_schema = cdmDatabaseSchema,
+    snakeCaseToCamelCase = TRUE
   )
   message("Fetching concept descendants")
   # Also creating descendant (is the same as ancestor concept) for non-standard 
@@ -128,7 +129,7 @@ fetchConceptSetData <- function(conceptSetExpression,
     connection = connection,
     sql = sql,
     snakeCaseToCamelCase = TRUE,
-    cdm_database_schema = cdmDatabaseSchema
+    cdm_database_schema = cdmDatabaseSchema,
   )
   sql <- "
     TRUNCATE TABLE #concept_set; 

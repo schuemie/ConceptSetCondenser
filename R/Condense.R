@@ -48,13 +48,16 @@ condenseConceptSet <- function(conceptSetData) {
                                  function(x) tibble(conceptId = x$conceptId, exclude = x$exclude, descendants = x$descendants))
   conceptSetExpression <- bind_rows(conceptSetExpression)
   conceptSetExpression <- conceptSetExpression |>
-    rename(CONCEPT_ID = "conceptId") |>
-    inner_join(conceptSetData$conceptMetaData, by = join_by("CONCEPT_ID"))
+    inner_join(conceptSetData$conceptMetaData, by = join_by("conceptId"))
   
   # row = rows[[1]]
   toCirceConcept <- function(row) {
+    circeRow <- row |>
+      select(-"exclude", -"descendants") |>
+      SqlRender::camelCaseToSnakeCaseNames()
+    colnames(circeRow) <- toupper(colnames(circeRow))
     concept <- list(
-      concept = as.list(select(row, -"exclude", -"descendants")),
+      concept = as.list(circeRow),
       isExcluded = row$exclude,
       includeDescendants = row$descendants,
       includeMapped = FALSE
